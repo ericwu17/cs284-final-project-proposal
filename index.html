@@ -1,24 +1,232 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CS284 Final Project Proposal</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      max-width: 800px;
-      margin: 40px auto;
-      padding: 0 16px;
-      line-height: 1.6;
-      color: #222;
-      background: #fff;
-    }
-    h1 { border-bottom: 1px solid #ddd; padding-bottom: 8px; }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulating and Path-Tracing Translucent Jello</title>
+<style>
+  /* Close to browser defaults: serif text, black on white, default link colors. */
+  body {
+    font-family: "Times New Roman", Times, "Liberation Serif", serif;
+    background: #fff;
+    color: #000;
+  }
+  main { max-width: 800px; margin: 0 auto; padding: 8px; }
+  a { overflow-wrap: anywhere; }
+  .course { margin: 0; }
+  .subtitle { font-style: italic; }
+  .team { list-style: none; padding: 0; }
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid #000; padding: 4px 6px; text-align: left; vertical-align: top; }
+  td:first-child { white-space: nowrap; }
+  .table-wrap { overflow-x: auto; }
+  @media (max-width: 600px) {
+    td:first-child { white-space: normal; }
+  }
+  @media print {
+    main { max-width: none; padding: 0; }
+    h2, h3 { break-after: avoid; page-break-after: avoid; }
+    table, tr, li { break-inside: avoid; page-break-inside: avoid; }
+  }
+</style>
 </head>
 <body>
-  <h1>CS284 Final Project Proposal</h1>
-  <p>This is a test page. If you can see this, GitHub Pages is working.</p>
+<main>
+
+<header>
+  <p class="course">CS 184/284 Final Project Proposal</p>
+  <h1>Simulating and Path-Tracing Translucent Jello</h1>
+  <p class="subtitle">A volumetric soft-body simulation of jello, rendered with physics based light transport</p>
+  <ul class="team">
+    <li>Eric Wu <span>(284)</span></li>
+    <li>Wenxuan Yuan <span>(184)</span></li>
+    <li>Arthur Yu <span>(184)</span></li>
+    <li>Alex Dils <span>(184)</span></li>
+  </ul>
+  <p class="pagelink">Proposal webpage:
+    <a href="https://ericwu17.github.io/cs284-final-project-proposal/">https://ericwu17.github.io/cs284-final-project-proposal/</a></p>
+</header>
+
+<h2>Summary</h2>
+<p class="summary">
+  We will simulate a block of jello as a volumetric soft body in two ways: a mass-spring system on a
+  tetrahedral mesh and Extended Position-Based Dynamics (XPBD) with volume-preservation constraints.
+</p>
+<p class="summary">
+  The
+  jello will fall under gravity, land on a plate, and wobble as the plate shakes. We will render the
+  simulated frames in our own path tracer, extended with a refractive boundary and an absorbing interior
+  medium to capture jello's translucent look. We will then compare the two simulation methods quantitatively
+  and visually.
+</p>
+
+<h2>Problem Description</h2>
+<p>
+  Jello is a familiar material that is hard to get right in both simulation and rendering. Physically, it is
+  nearly incompressible: when it squashes, it bulges sideways instead of losing volume. It is
+  also very soft but elastic, so it jiggles for a long time after a disturbance. A simulation
+  must let it deform a lot without becoming unstable, which creates a tension between stiffness, time step,
+  and stability. It is also contact-heavy: it lands on surfaces, rests on them, and gets
+  driven by moving objects such as a plate.
+</p>
+<p>
+  Visually, jello's look comes from light that refracts at its surface and is then
+  absorbed and scattered inside the volume. This gives a saturated color that deepens with
+  thickness, a soft glow, and bright refracted highlights. Surface-only shading such as the
+  diffuse/Phong models from earlier homeworks cannot capture this, because the appearance depends on the
+  path length of light through the deformed volume.
+</p>
+<p>
+  Mass-spring systems, like the cloth simulator from HW4, are simple and familiar but are known to struggle
+  with volume preservation and stiffness. Position-based methods (PBD/XPBD) are popular in real-time graphics
+  because they are stable and can enforce volume directly as a constraint. It is less obvious how much better
+  XPBD is for this specific material, and at what performance cost.
+</p>
+<div class="callout">
+  <strong>Approach.</strong>
+  (1) Tetrahedralize the jello shape on a regular grid.
+  (2) Simulate it with (a) a mass-spring system on the tet edges plus a per-tet volume penalty force,
+  extending our HW4 cloth code, and (b) an XPBD solver with edge-distance and tetrahedral-volume constraints.
+  (3) Calibrate both solvers to the same material, then handle gravity, ground collision with friction, and a
+  kinematic shaking plate.
+  (4) Write each frame's boundary surface, with smooth vertex normals, into a template COLLADA (.dae) scene
+  that the HW3 path tracer already loads.
+  (5) Render with our HW3 path tracer, extended with a smooth dielectric interface (Fresnel
+  reflection/refraction) and a homogeneous Beer-Lambert absorbing medium. Volumetric scattering is a stretch
+  goal.
+</div>
+
+<h2>Goals and Deliverables</h2>
+
+<h3>What we plan to deliver (baseline)</h3>
+<ol>
+  <li><strong>Tetrahedral meshing</strong> of a jello block, using regular-grid tetrahedralization , plus boundary-surface extraction.</li>
+  <li><strong>Mass-spring soft body:</strong> one spring per tet edge (this already includes the face diagonals of each grid cell), spring damping, and semi-implicit Euler integration. A per-tet volume penalty force gives the mass-spring solver its own volume term, and we can switch it off for an ablation.</li>
+  <li><strong>XPBD soft body:</strong> edge-distance and tet-volume constraints with compliance parameters, solved with substepping. We also run it with distance constraints only, for an ablation.</li>
+  <li><strong>Material calibration:</strong> we tune mass-spring stiffness and XPBD compliance so that a reference block at a reference resolution has the same fundamental oscillation frequency, and we tune damping so its oscillations decay at the same rate. We take both targets from video of real jello. All other comparisons use these calibrated parameters.</li>
+  <li><strong>Forces and contact:</strong> gravity, ground-plane collision with friction, and a kinematic plate that shakes sinusoidally and acts as a moving collider.</li>
+  <li><strong>Translucent rendering:</strong> a dielectric BSDF with Fresnel reflection and refraction, plus a Beer-Lambert absorbing interior medium for colored, see-through jello, in our own path tracer. We track whether a ray is inside the medium using the watertight boundary surface and its outward normals. We use smooth vertex normals, because refraction makes the facets of a coarse tet surface very visible.</li>
+  <li><strong>Demo:</strong> rendered animations of (a) jello dropped onto a plate and (b) jello on a shaking plate, with mass-spring and XPBD shown side by side.</li>
+</ol>
+
+<h3>Concrete targets</h3>
+<ul>
+  <li><strong>Mesh:</strong> 8&times;8&times;8 grid cells (2,560 tets) for the demos. For the performance study we'll scale to about 20,000 tets.</li>
+  <li><strong>Volume:</strong> XPBD with volume constraints stays within 1% of the rest volume throughout both scenarios. We will report the mass-spring error.</li>
+  <li><strong>Animation:</strong> 4-second clips at 30 fps (120 frames) for each solver and scenario.</li>
+  <li><strong>Rendering:</strong> 960&times;540 at 64 or 256 samples per pixel.</li>
+</ul>
+
+<h3>How we will measure quality and performance</h3>
+<ul>
+  <li><strong>Volume preservation:</strong> percent deviation from the rest volume over time. We measure it for each solver and scenario, with each solver's volume term turned on and off.</li>
+  <li><strong>Stability:</strong> a run counts as unstable if any tet inverts, any position becomes NaN, or the mesh's bounding box grows past twice its rest size within 5 simulated seconds. We report the largest stable time step for each solver as stiffness increases.</li>
+  <li><strong>Performance:</strong> wall-clock time per simulated frame as tet-mesh resolution increases, measured with matching resolutions and frame rates for both solvers.</li>
+  <li><strong>Dynamics:</strong> center-of-mass and top-surface traces after impact, to compare oscillation frequency, decay, and settling, along with side-by-side visual comparison.</li>
+  <li><strong>Rendering:</strong> render time per frame as medium density and mesh resolution vary, and a visual comparison of absorption coefficients and index of refraction against photos we take of real jello.</li>
+</ul>
+
+<h3>Questions we plan to answer</h3>
+<ul>
+  <li>Can a mass-spring system keep jello's volume, with and without a volume penalty, and at what cost in stiffness, time step, and run time?</li>
+  <li>When both solvers are calibrated to the same material, how do they compare in stability, speed, and visual plausibility for a nearly incompressible soft body?</li>
+  <li>How do the absorption coefficients and the index of refraction change how "jello-like" the render looks?</li>
+</ul>
+
+<h3>What we hope to deliver (aspirational, in priority order)</h3>
+<ol>
+  <li><strong>Volumetric scattering</strong> in the medium with a Henyey–Greenstein phase function (single, then multiple scattering) for a soft subsurface glow, beyond absorption alone.</li>
+  <li><strong>Deformation-aware medium:</strong> per-tet medium density scaled by rest volume over current volume, so compressed regions look darker. This also makes any volume loss in the mass-spring solver visible in the render.</li>
+  <li><strong>A third solver:</strong> stable Neo-Hookean constraints in XPBD (Macklin &amp; Müller 2021), for a more physically grounded material model.</li>
+  <li><strong>Arbitrary shapes</strong> through TetGen, such as molded jello, with a high-resolution render mesh embedded in the coarse tet mesh.</li>
+  <li><strong>Multiple bodies:</strong> two jellos colliding or stacked, or fruit pieces suspended inside.</li>
+  <li><strong>Acceleration:</strong> a parallel or GPU XPBD solver for higher-resolution meshes.</li>
+</ol>
+
+<h2>Schedule</h2>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>Week</th><th>Tasks</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Week 1<br><span class="tag">Nov 11–17</span></td>
+      <td>
+        Goal: each piece runs on its own on a falling block.
+        <ul>
+          <li><strong>Setup:</strong> private shared repo, build the HW3/HW4 starting code.</li>
+          <li><strong>Meshing and pipeline:</strong> grid tetrahedralization, boundary-surface extraction with smooth normals, per-frame export into a template .dae scene.</li>
+          <li><strong>Mass-spring solver:</strong> springs on tet edges, gravity, ground collision.</li>
+          <li><strong>XPBD solver:</strong> distance constraints, substepping, ground collision.</li>
+          <li><strong>Rendering:</strong> dielectric BSDF (Fresnel reflection and refraction) in the path tracer, tested on static meshes.</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>Week 2<br><span class="tag">Nov 18–22</span></td>
+      <td>
+        Goal: both scenarios run end to end for the milestone.
+        <ul>
+          <li><strong>Volume preservation:</strong> per-tet volume penalty force for mass-spring, tet-volume constraints for XPBD.</li>
+          <li><strong>Contact:</strong> ground friction, shaking-plate collider.</li>
+          <li><strong>Metrics:</strong> logger for volume, timing, and center of mass.</li>
+          <li><strong>Rendering:</strong> Beer-Lambert absorption with inside/outside medium tracking; first rendered sequences of both scenarios.</li>
+          <li><strong>Milestone:</strong> SIGGRAPH-template report, 1-minute video, 2–3 slides.</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>Week 3<br><span class="tag">Nov 23–29</span></td>
+      <td>
+        Goal: calibrated experiments. This week includes Thanksgiving, so the workload is lighter.
+        <ul>
+          <li><strong>Calibration:</strong> record video of real jello as reference; fit material parameters to it.</li>
+          <li><strong>Experiments:</strong> stiffness, time-step, and resolution sweeps with each volume term on and off; plotting scripts.</li>
+          <li><strong>Appearance:</strong> tune absorption and index of refraction against photos of real jello; start scattering (stretch goal).</li>
+          <li><strong>Stretch goals:</strong> deformation-aware medium, Neo-Hookean, only if the baseline is done.</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>Week 4<br><span class="tag">Nov 30–Dec 6</span></td>
+      <td>
+        Goal: final results and write-up.
+        <ul>
+          <li><strong>By Dec 2:</strong> freeze the code and start final renders overnight.</li>
+          <li><strong>Analysis:</strong> final plots and the comparison between solvers.</li>
+          <li><strong>Paper:</strong> 4–6 page write-up.</li>
+          <li><strong>Media:</strong> 1–2 minute video, 5-minute presentation with a 1-minute demo.</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>Week 5<br><span class="tag">Dec 7–8</span></td>
+      <td>Final presentation; attend at least 8 other groups' presentations.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+<h2>Resources</h2>
+
+<h3>References</h3>
+<ol class="refs">
+  <li>M. Macklin, M. Müller, N. Chentanez. “<a href="https://matthias-research.github.io/pages/publications/XPBD.pdf">XPBD: Position-Based Simulation of Compliant Constrained Dynamics</a>.” <em>Motion in Games</em>, 2016.</li>
+  <li>M. Pharr, W. Jakob, G. Humphreys. <em><a href="https://pbr-book.org/4ed/contents">Physically Based Rendering: From Theory to Implementation</a></em>, 4th ed., 2023. Ch. 11 (Volume Scattering) and Ch. 14 (Light Transport II: Volume Rendering).</li>
+</ol>
+
+<h3>Platform, hardware, and software</h3>
+<ul>
+  <li><strong>Starting code:</strong> our own CS 184 HW4 ClothSim (mass-spring integration and collision structure) and HW3 PathTracer (BVH, .dae scene loading, direct and global illumination). We will build tet meshing, both volumetric solvers, the volume penalty, calibration, plate dynamics, the dielectric BSDF, the participating medium, and the metrics and comparison tooling ourselves.</li>
+  <li><strong>Other code we consult:</strong> Ten Minute Physics tutorial 10 publishes JavaScript source for an XPBD soft body with the same constraints as our baseline. We will use it as a reference for checking our results and write our own C++ implementation, not port its code. Our reports will state clearly which parts are new.</li>
+  <li><strong>Language and tools:</strong> C++17 with CMake. Python and matplotlib for plots. FFmpeg for assembling frames into video. LaTeX with the ACM SIGGRAPH template for the milestone and final paper.</li>
+  <li><strong>Hardware:</strong> team members' laptops (macOS), with multithreaded CPU rendering. Final renders run overnight on all four machines in parallel.</li>
+  <li><strong>Version control:</strong> a private shared GitHub repository, since it contains homework code. Each member commits under their own account.</li>
+</ul>
+
+</main>
 </body>
 </html>
